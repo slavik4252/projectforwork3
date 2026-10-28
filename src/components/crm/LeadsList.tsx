@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase, type Lead, type LeadStatus } from "@/lib/supabase";
+import { useReviewStates } from "./useReviewStates";
 import { StatusBadge } from "./Dashboard";
 import { useLeadsLive } from "./useLeadsLive";
 import { Search, Filter, Inbox } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = {
-  all: "Все",
+  all: "Рабочие лиды",
+  reviewed: "Выполненные · проверенные",
   new: "Новые",
   qualified: "Квалифицированные",
   in_progress: "В работе",
@@ -17,6 +19,7 @@ const STATUSES = Object.keys(STATUS_LABELS);
 
 export default function LeadsList({ onOpen }: { onOpen: (lead: Lead) => void }) {
   const [leads, setLeads] = useState<Lead[]>([]);
+  const { states: reviews, error: reviewError } = useReviewStates(leads.map(lead => lead.id));
   const [filter, setFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -24,7 +27,7 @@ export default function LeadsList({ onOpen }: { onOpen: (lead: Lead) => void }) 
   async function load() {
     setLoading(true);
     let q = supabase.from("leads").select("*").order("created_at", { ascending: false });
-    if (filter !== "all") q = q.eq("status", filter as LeadStatus);
+    if (filter !== "all" && filter !== "reviewed") q = q.eq("status", filter as LeadStatus);
     const { data } = await q;
     setLeads((data ?? []) as Lead[]);
     setLoading(false);
@@ -33,14 +36,15 @@ export default function LeadsList({ onOpen }: { onOpen: (lead: Lead) => void }) 
   useEffect(() => { load(); }, [filter]);
   useLeadsLive(() => load());
 
+  const working = leads.filter(lead => filter === "reviewed" ? reviews[lead.id]?.status === "accepted" : reviews[lead.id]?.status !== "accepted");
   const filtered = query
-    ? leads.filter(
+    ? working.filter(
         (l) =>
           l.name.toLowerCase().includes(query.toLowerCase()) ||
           l.contact.toLowerCase().includes(query.toLowerCase()) ||
           l.source.toLowerCase().includes(query.toLowerCase())
       )
-    : leads;
+    : working;
 
   return (
     <div className="space-y-5">
@@ -77,6 +81,7 @@ export default function LeadsList({ onOpen }: { onOpen: (lead: Lead) => void }) 
         </div>
       </div>
 
+      {reviewError && <p role="alert" className="text-sm text-red-600">{reviewError}</p>}
       <div className="bg-panel border border-c rounded-2xl overflow-hidden">
         {loading ? (
           <p className="px-5 py-10 text-center text-dim text-sm">Загрузка…</p>
@@ -97,6 +102,7 @@ export default function LeadsList({ onOpen }: { onOpen: (lead: Lead) => void }) 
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <p className="font-medium text-sm truncate">{l.name || "Без имени"}</p>
                     <StatusBadge status={l.status} />
+                    {reviews[l.id] && <span className={`text-xs rounded-lg px-2 py-1 ${reviews[l.id].status === "needs_info" ? "bg-amber-100 text-amber-900" : "bg-blue-50 text-blue-700"}`}>{reviews[l.id].label}</span>}
                   </div>
                   <p className="text-xs text-dim break-words">
                     {l.contact || "—"} · {l.channel} · {l.source || "без источника"}
