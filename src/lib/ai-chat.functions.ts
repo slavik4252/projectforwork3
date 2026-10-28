@@ -33,6 +33,19 @@ export const askAgent = createServerFn({ method: "POST" })
     return { messages };
   })
   .handler(async ({ data }) => {
+    const gateway = process.env["GIGACHAT_GATEWAY_URL"];
+    if (gateway) {
+      const gatewayToken = process.env["GIGACHAT_GATEWAY_TOKEN"];
+      if (!gatewayToken || !gateway.startsWith("https://")) throw new Error("Не настроен защищённый сервер GigaChat");
+      const response = await fetch(new URL("/chat", gateway), {
+        method:"POST",headers:{Authorization:`Bearer ${gatewayToken}`,"Content-Type":"application/json"},
+        body:JSON.stringify({instructions:SYSTEM_PROMPT,messages:data.messages}),signal:AbortSignal.timeout(55000),
+      });
+      if (!response.ok) throw new Error("GigaChat временно недоступен. Оставьте контакт в форме заявки.");
+      const result = await response.json();
+      if (typeof result.content !== "string" || !result.content.trim()) throw new Error("Пустой ответ GigaChat");
+      return {content:result.content};
+    }
     const key = process.env["GIGACHAT_CREDENTIALS"]?.trim();
     if (!key) throw new Error("Не настроен серверный ключ GigaChat");
     const auth = await fetch("https://ngw.devices.sberbank.ru:9443/api/v2/oauth", {
@@ -41,6 +54,7 @@ export const askAgent = createServerFn({ method: "POST" })
       body: new URLSearchParams({ scope: process.env["GIGACHAT_SCOPE"] || "GIGACHAT_API_PERS" }),
       signal: AbortSignal.timeout(20000),
     });
+    if (auth.status === 526) throw new Error("GigaChat требует доверенный сертификат: подключите сервер GIGACHAT_GATEWAY_URL.");
     if (!auth.ok) throw new Error(`Ошибка авторизации GigaChat (${auth.status})`);
     const token = await auth.json();
     if (typeof token.access_token !== "string") throw new Error("Не получен токен GigaChat");
