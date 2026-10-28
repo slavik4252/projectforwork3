@@ -1,13 +1,26 @@
 import { useEffect, useState } from "react";
+import { configureTelegramReview } from "@/lib/review-state.functions";
 import { Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function Managers() {
+  const [connecting, setConnecting] = useState(false);
+  const [botMessage, setBotMessage] = useState("");
   const [list, setList] = useState<{ email: string }[]>([]);
   const [me, setMe] = useState("");
   const [email, setEmail] = useState("");
   const [msg, setMsg] = useState("");
 
+  async function connectBot() {
+    setConnecting(true); setBotMessage("");
+    try {
+      const {data} = await supabase.auth.getSession();
+      if (!data.session) throw new Error("Войдите в CRM");
+      await configureTelegramReview({data:{accessToken:data.session.access_token}});
+      setBotMessage("Telegram подключён. Отправьте новый тестовый лид на проверку.");
+    } catch(e) { setBotMessage(e instanceof Error ? e.message : "Не удалось подключить бота"); }
+    finally {setConnecting(false);}
+  }
   async function load() {
     const { data } = await supabase.from("managers").select("email").order("created_at");
     setList(data ?? []);
@@ -37,6 +50,14 @@ export default function Managers() {
           Выйти ({me})
         </button>
       </div>
+      <section className="border border-c rounded-xl p-4 space-y-3">
+        <h3 className="font-semibold">Проверка лидов в Telegram</h3>
+        <p className="text-sm text-dim">После настройки D1 и секретов нажмите кнопку один раз. Получатель берётся из серверных настроек.</p>
+        <button type="button" disabled={connecting} onClick={()=>void connectBot()} className="min-h-11 bg-[#2563eb] text-white rounded-lg px-4 cursor-pointer disabled:opacity-50">
+          {connecting ? "Подключаем…" : "Подключить кнопки Telegram"}
+        </button>
+        {botMessage && <p role="status" className="text-sm">{botMessage}</p>}
+      </section>
       <p className="text-sm text-dim">
         Только эти почты могут входить в CRM по коду из письма.
       </p>
