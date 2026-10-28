@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase, type Lead, type LeadStatus, type Note, type Deal, type Activity } from "@/lib/supabase";
 import { StatusBadge } from "./Dashboard";
+import { sendLeadToTelegram } from "@/lib/telegram-review.functions";
 import { ArrowLeft, Plus, Trash2, Phone, Mail, Send, MessageCircle, StickyNote } from "lucide-react";
 
 const STATUS_OPTIONS: LeadStatus[] = ["new", "qualified", "in_progress", "won", "lost"];
@@ -14,6 +15,8 @@ const CHANNEL_ICON: Record<string, typeof Phone> = {
 };
 
 export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () => void }) {
+  const [sendingTelegram, setSendingTelegram] = useState(false);
+  const [telegramMessage, setTelegramMessage] = useState("");
   const [notes, setNotes] = useState<Note[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -32,6 +35,21 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
   }
 
   useEffect(() => { load(); }, [lead.id]);
+
+  async function sendForReview() {
+    if (sendingTelegram) return;
+    setSendingTelegram(true);
+    setTelegramMessage("");
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      if (error || !data.session) throw new Error("Сначала войдите в CRM");
+      const result = await sendLeadToTelegram({ data: { accessToken: data.session.access_token, leadId: lead.id } });
+      setTelegramMessage(result.logged ? "Лид отправлен в Telegram на проверку" : "Лид отправлен, но запись в истории не сохранилась. Повторно отправлять не нужно.");
+      await load();
+    } catch (error) {
+      setTelegramMessage(error instanceof Error ? error.message : "Не удалось отправить лид");
+    } finally { setSendingTelegram(false); }
+  }
 
   async function addNote() {
     if (!newNote.trim()) return;
@@ -95,6 +113,15 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
 
         {lead.note && <p className="mt-4 pt-4 border-t border-c text-sm text-dim">{lead.note}</p>}
 
+        <div className="mt-5 space-y-2">
+          <button type="button" onClick={() => void sendForReview()} disabled={sendingTelegram}
+            className="inline-flex items-center gap-2 bg-[#2563eb] text-white rounded-lg px-4 py-2 text-sm cursor-pointer hover:bg-[#1d4ed8] disabled:opacity-50 disabled:cursor-not-allowed">
+            <Send className="w-4 h-4" />
+            {sendingTelegram ? "Отправляем…" : "Отправить в Telegram на проверку"}
+          </button>
+          <p className="text-xs text-dim">Будут переданы имя, контакт, канал и информация из карточки лида.</p>
+          {telegramMessage && <p role="status" className="text-sm">{telegramMessage}</p>}
+        </div>
         <div className="mt-5">
           <p className="text-xs text-dim mb-2">Статус</p>
           <div className="flex flex-wrap gap-2">
