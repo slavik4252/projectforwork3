@@ -58,7 +58,7 @@ export default function LeadForm() {
     <form
       id="lead-form"
       onSubmit={submit}
-      className="bg-panel border border-c rounded-2xl p-6 sm:p-7 space-y-4 glow-ring"
+      className="bg-panel border border-c rounded-2xl p-4 sm:p-7 space-y-4 glow-ring"
     >
       <div>
         <h3 className="font-display text-xl font-bold">Запустим тест в вашей нише</h3>
@@ -71,19 +71,19 @@ export default function LeadForm() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Как вас зовут"
-          className="w-full bg-input border border-c rounded-xl px-4 py-3 text-sm placeholder:text-[#94a3b8] focus:outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/15 transition"
+          className="w-full bg-input border border-c rounded-xl px-4 py-3 text-base sm:text-sm placeholder:text-[#94a3b8] focus:outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/15 transition"
         />
         <input
           required
           value={contact}
           onChange={(e) => setContact(e.target.value)}
           placeholder="Email, Telegram @username, Max или номер телефона"
-          className="w-full bg-input border border-c rounded-xl px-4 py-3 text-sm placeholder:text-[#94a3b8] focus:outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/15 transition"
+          className="w-full bg-input border border-c rounded-xl px-4 py-3 text-base sm:text-sm placeholder:text-[#94a3b8] focus:outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/15 transition"
         />
         <select
           value={channel}
           onChange={(e) => setChannel(e.target.value)}
-          className="w-full bg-input border border-c rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#2563eb] transition"
+          className="w-full bg-input border border-c rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none focus:border-[#2563eb] transition"
         >
           {channels.map((c) => (
             <option key={c} value={c}>{c}</option>
@@ -94,7 +94,7 @@ export default function LeadForm() {
           onChange={(e) => setSource(e.target.value)}
           placeholder="Ниша бизнеса: чем занимаетесь, что продаёте"
           rows={2}
-          className="w-full bg-input border border-c rounded-xl px-4 py-3 text-sm placeholder:text-[#94a3b8] focus:outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/15 transition resize-none"
+          className="w-full bg-input border border-c rounded-xl px-4 py-3 text-base sm:text-sm placeholder:text-[#94a3b8] focus:outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/15 transition resize-none"
         />
       </div>
 
