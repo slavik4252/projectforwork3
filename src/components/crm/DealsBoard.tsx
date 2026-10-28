@@ -22,6 +22,7 @@ function contactChannel(lead: Lead) {
 export default function DealsBoard() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -70,8 +71,11 @@ export default function DealsBoard() {
           <h2 className="font-display text-2xl font-bold">Сделки и лиды</h2>
           <p className="text-dim text-sm mt-1">Все заявки на одной доске. Перетащите карточку или выберите этап в её меню.</p>
         </div>
-        <button type="button" disabled={saving} onClick={() => { setError(""); void load(); }}
-          className="text-sm text-[#2563eb] disabled:opacity-50">Обновить</button>
+        <button type="button" disabled={saving || refreshing || loading} aria-busy={refreshing}
+          onClick={async () => { setError(""); setRefreshing(true); try { await load(); } finally { setRefreshing(false); } }}
+          className="shrink-0 inline-flex items-center justify-center rounded-lg border border-[#2563eb] bg-[#2563eb] px-4 py-2 text-sm font-medium text-white shadow-sm cursor-pointer transition-colors hover:bg-[#1d4ed8] active:bg-[#1e40af] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed">
+          {refreshing ? "Обновляем…" : "Обновить"}
+        </button>
       </div>
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {loading && <p role="status" className="text-sm text-dim">Загрузка лидов…</p>}
