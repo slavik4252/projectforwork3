@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import HowItWorks from "@/components/HowItWorks";
@@ -30,6 +30,9 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const [crmOpen, setCrmOpen] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("crm") === "1") setCrmOpen(true);
+  }, []);
   return (
     <div className="min-h-screen bg-page text-[#0b1626]">
       <Navbar onCrmClick={() => setCrmOpen(true)} />
