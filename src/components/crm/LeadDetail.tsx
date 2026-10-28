@@ -16,6 +16,7 @@ const CHANNEL_ICON: Record<string, typeof Phone> = {
 };
 
 export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () => void }) {
+  const [screenshots, setScreenshots] = useState<File[]>([]);
   const [sendingTelegram, setSendingTelegram] = useState(false);
   const [telegramMessage, setTelegramMessage] = useState("");
   const [notes, setNotes] = useState<Note[]>([]);
@@ -35,7 +36,7 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
     setActivities((a.data ?? []) as Activity[]);
   }
 
-  useEffect(() => { load(); }, [lead.id]);
+  useEffect(() => { setScreenshots([]); load(); }, [lead.id]);
 
   async function sendForReview() {
     if (sendingTelegram) return;
@@ -44,7 +45,19 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
     try {
       const { data, error } = await supabase.auth.getSession();
       if (error || !data.session) throw new Error("Сначала войдите в CRM");
-      const result = await sendLeadToTelegram({ data: { accessToken: data.session.access_token, leadId: lead.id } });
+      const encoded = await Promise.all(screenshots.map(file => new Promise<{ name: string; base64: string }>((resolve,reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({ name: file.name, base64: String(reader.result).split(",")[1] || "" });
+        reader.onerror = () => reject(new Error("Не удалось прочитать скриншот"));
+        reader.readAsDataURL(file);
+      })));
+      const result = await sendLeadToTelegram({ data: { accessToken: data.session.access_token, leadId: lead.id, screenshots: encoded } });
+      setScreenshots(previous => previous.slice(result.attachmentsSent));
+      if (result.attachmentError) {
+        setTelegramMessage("Карточка отправлена, но не все скриншоты подтверждены. Проверьте Telegram перед повторной отправкой. Неотправленные файлы оставлены в форме.");
+        await load();
+        return;
+      }
       setTelegramMessage(result.logged ? "Лид отправлен в Telegram на проверку" : "Лид отправлен, но запись в истории не сохранилась. Повторно отправлять не нужно.");
       await load();
     } catch (error) {
@@ -84,7 +97,7 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
   const ChIcon = CHANNEL_ICON[lead.channel] ?? Mail;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 break-words">
       <button
         onClick={onBack}
         className="inline-flex items-center gap-2 text-sm text-dim hover:text-[#0b1626] transition-colors"
@@ -92,13 +105,13 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
         <ArrowLeft className="w-4 h-4" /> Назад к лидам
       </button>
 
-      <div className="bg-panel border border-c rounded-2xl p-6">
+      <div className="bg-panel border border-c rounded-2xl p-4 sm:p-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex items-start gap-4">
+          <div className="flex items-start gap-3 min-w-0">
             <span className="grid place-items-center w-12 h-12 rounded-xl bg-[#2563eb]/10 text-[#2563eb] shrink-0">
               <ChIcon className="w-6 h-6" />
             </span>
-            <div>
+            <div className="min-w-0 break-words">
               <h2 className="font-display text-xl font-bold">{lead.name || "Без имени"}</h2>
               <p className="text-dim text-sm mt-1">{lead.contact || "—"}</p>
               <p className="text-xs text-[#94a3b8] mt-1">
@@ -143,7 +156,7 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
         </div>
       </div>
 
-      <LeadEvidence key={lead.id} leadId={lead.id} />
+      <LeadEvidence files={screenshots} onChange={setScreenshots} disabled={sendingTelegram} />
 
       <div className="grid lg:grid-cols-2 gap-5">
         <div className="bg-panel border border-c rounded-2xl p-5 space-y-4">
@@ -156,7 +169,7 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
               onChange={(e) => setNewNote(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addNote()}
               placeholder="Добавить заметку…"
-              className="flex-1 bg-page border border-c rounded-xl px-3 py-2 text-sm placeholder:text-[#94a3b8] focus:outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/15 transition"
+              className="min-w-0 flex-1 bg-page border border-c rounded-xl px-3 py-2 text-sm placeholder:text-[#94a3b8] focus:outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/15 transition"
             />
             <button
               onClick={addNote}
@@ -177,7 +190,7 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
                 </div>
                 <button
                   onClick={() => deleteNote(n.id)}
-                  className="opacity-0 group-hover:opacity-100 text-[#e11d48] hover:scale-110 transition"
+                  className="p-2 min-h-11 min-w-11 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-[#e11d48] hover:scale-110 transition"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
