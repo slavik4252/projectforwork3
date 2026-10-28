@@ -1,89 +1,116 @@
-import { useEffect, useState } from "react";
-import { supabase, type Deal, type DealStage } from "@/lib/supabase";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { supabase, type Lead, type LeadStatus } from "@/lib/supabase";
 import { useLeadsLive } from "./useLeadsLive";
 
-const STAGES: { id: DealStage; label: string; color: string }[] = [
+const STAGES: { id: LeadStatus; label: string; color: string }[] = [
   { id: "new", label: "Новые", color: "#f59e0b" },
-  { id: "qualified", label: "Квалифицированы", color: "#2563eb" },
-  { id: "proposal", label: "Предложение", color: "#6366f1" },
-  { id: "negotiation", label: "Переговоры", color: "#0d9488" },
-  { id: "won", label: "Выиграны", color: "#0d9488" },
-  { id: "lost", label: "Проиграны", color: "#e11d48" },
+  { id: "qualified", label: "Тёплые", color: "#2563eb" },
+  { id: "in_progress", label: "В работе", color: "#6366f1" },
+  { id: "won", label: "Успешные", color: "#0d9488" },
+  { id: "lost", label: "Отказ", color: "#e11d48" },
 ];
 
+function niche(lead: Lead) {
+  return lead.note?.replace(/^(Интерес|Ниша):\s*/i, "").trim() || "Не указана";
+}
+function contactChannel(lead: Lead) {
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.contact.trim())) return "Email";
+  if (lead.contact.trim().startsWith("@")) return "Telegram";
+  return lead.source || lead.channel || "Контакт";
+}
+
 export default function DealsBoard() {
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [leadNames, setLeadNames] = useState<Record<string, string>>({});
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
+  const moving = useRef(false);
+  const request = useRef(0);
 
-  async function load() {
-    const { data } = await supabase.from("deals").select("*").order("created_at", { ascending: false });
-    const d = (data ?? []) as Deal[];
-    setDeals(d);
-    const leadIds = [...new Set(d.map((x) => x.lead_id))];
-    if (leadIds.length) {
-      const { data: leads } = await supabase.from("leads").select("id,name").in("id", leadIds);
-      const map: Record<string, string> = {};
-      (leads ?? []).forEach((l: { id: string; name: string }) => { map[l.id] = l.name || "Без имени"; });
-      setLeadNames(map);
+  const load = useCallback(async () => {
+    const version = ++request.current;
+    try {
+      const result = await supabase.from("leads").select("*").order("created_at", { ascending: false });
+      if (version !== request.current) return;
+      if (result.error) throw result.error;
+      setLeads((result.data ?? []) as Lead[]);
+    } catch {
+      if (version === request.current) setError("Не удалось загрузить лиды. Попробуйте обновить список.");
+    } finally {
+      if (version === request.current) setLoading(false);
     }
-  }
+  }, []);
+  useEffect(() => { void load(); return () => { ++request.current; }; }, [load]);
+  useLeadsLive(() => { void load(); });
 
-  useEffect(() => { load(); }, []);
-  useLeadsLive(() => load());
-
-  async function moveStage(id: string, stage: DealStage) {
-    await supabase.from("deals").update({ stage }).eq("id", id);
-    setDeals((prev) => prev.map((d) => (d.id === id ? { ...d, stage } : d)));
+  async function moveStage(id: string, status: LeadStatus) {
+    if (moving.current || leads.find(lead => lead.id === id)?.status === status) return;
+    moving.current = true;
+    setSaving(true);
+    setError("");
+    try {
+      const result = await supabase.from("leads").update({ status }).eq("id", id).select("id,status").single();
+      if (result.error || !result.data) throw result.error || new Error("Lead not updated");
+      ++request.current;
+      setLeads(previous => previous.map(lead => lead.id === id ? { ...lead, status } : lead));
+    } catch {
+      setError("Не удалось сохранить этап. Карточка не перемещена.");
+    } finally {
+      moving.current = false;
+      setSaving(false);
+      setDragId(null);
+    }
   }
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="font-display text-2xl font-bold">Сделки</h2>
-        <p className="text-dim text-sm mt-1">Перетащите карточку между колонками, чтобы изменить этап</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-2xl font-bold">Сделки и лиды</h2>
+          <p className="text-dim text-sm mt-1">Все заявки на одной доске. Перетащите карточку или выберите этап в её меню.</p>
+        </div>
+        <button type="button" disabled={saving} onClick={() => { setError(""); void load(); }}
+          className="text-sm text-[#2563eb] disabled:opacity-50">Обновить</button>
       </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 overflow-x-auto pb-2">
-        {STAGES.map((s) => {
-          const stageDeals = deals.filter((d) => d.stage === s.id);
-          const total = stageDeals.reduce((sum, d) => sum + Number(d.value), 0);
+      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+      {loading && <p role="status" className="text-sm text-dim">Загрузка лидов…</p>}
+      {!loading && leads.length === 0 && !error && <p className="text-sm text-dim">Заявок пока нет. Новые заявки появятся здесь.</p>}
+      <div className="flex gap-3 overflow-x-auto pb-4">
+        {STAGES.map(stage => {
+          const items = leads.filter(lead => lead.status === stage.id);
           return (
-            <div
-              key={s.id}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => dragId && moveStage(dragId, s.id)}
-              className="bg-soft border border-c rounded-2xl p-3 min-h-[200px]"
-            >
+            <section key={stage.id} aria-label={stage.label}
+              onDragOver={event => event.preventDefault()}
+              onDrop={event => { event.preventDefault(); if (dragId) void moveStage(dragId, stage.id); }}
+              className="bg-soft border border-c rounded-2xl p-3 min-h-[240px] min-w-[220px] flex-1">
               <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
-                  <p className="text-xs font-semibold">{s.label}</p>
-                </div>
-                <span className="text-[10px] text-[#94a3b8]">{stageDeals.length}</span>
+                <h3 className="flex items-center gap-2 text-xs font-semibold">
+                  <span className="w-2 h-2 rounded-full" style={{ background: stage.color }} />{stage.label}
+                </h3>
+                <span className="text-xs text-dim">{items.length}</span>
               </div>
-              <p className="text-[10px] text-[#94a3b8] mb-2">{total.toLocaleString("ru-RU")} ₽</p>
-              <div className="space-y-2">
-                {stageDeals.map((d) => (
-                  <div
-                    key={d.id}
-                    draggable
-                    onDragStart={() => setDragId(d.id)}
-                    onDragEnd={() => setDragId(null)}
-                    className="bg-panel border border-c rounded-xl p-3 cursor-grab active:cursor-grabbing hover:border-[#2563eb]/40 hover:shadow-sm transition"
-                  >
-                    <p className="text-sm font-medium truncate">{d.title}</p>
-                    <p className="text-[11px] text-dim mt-0.5 truncate">{leadNames[d.lead_id] ?? "—"}</p>
-                    <p className="text-sm font-bold text-[#0d9488] mt-1.5">
-                      {Number(d.value).toLocaleString("ru-RU")} ₽
-                    </p>
-                  </div>
+              <div className="space-y-3">
+                {items.map(lead => (
+                  <article key={lead.id} draggable={!saving}
+                    onDragStart={() => setDragId(lead.id)} onDragEnd={() => setDragId(null)}
+                    className="bg-panel border border-c rounded-xl p-3 space-y-2 cursor-grab active:cursor-grabbing">
+                    <h4 className="text-sm font-semibold break-words">{lead.name || "Без имени"}</h4>
+                    <p className="text-xs text-dim whitespace-pre-wrap break-words"><span className="font-medium">Ниша: </span>{niche(lead)}</p>
+                    <p className="text-xs break-words"><span className="text-dim">{contactChannel(lead)}: </span>{lead.contact || "Не указан"}</p>
+                    <label className="block text-xs text-dim">
+                      Этап
+                      <select value={lead.status} disabled={saving} aria-label={`Этап лида ${lead.name || "Без имени"}`}
+                        onChange={event => void moveStage(lead.id, event.target.value as LeadStatus)}
+                        className="block mt-1 w-full bg-panel border border-c rounded-lg px-2 py-2 text-xs">
+                        {STAGES.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+                      </select>
+                    </label>
+                  </article>
                 ))}
-                {stageDeals.length === 0 && (
-                  <p className="text-center text-[10px] text-[#94a3b8] py-4">Пусто</p>
-                )}
+                {items.length === 0 && <p className="text-center text-xs text-dim py-4">Пусто</p>}
               </div>
-            </div>
+            </section>
           );
         })}
       </div>
