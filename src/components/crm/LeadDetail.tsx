@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase, type Lead, type LeadStatus, type Note, type Deal, type Activity } from "@/lib/supabase";
+import { useReviewStates } from "./useReviewStates";
 import LeadEvidence from "./LeadEvidence";
 import { StatusBadge } from "./Dashboard";
 import { sendLeadToTelegram } from "@/lib/telegram-review.functions";
@@ -16,6 +17,8 @@ const CHANNEL_ICON: Record<string, typeof Phone> = {
 };
 
 export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () => void }) {
+  const { states: reviewStates, error: reviewError } = useReviewStates([lead.id]);
+  const accepted = reviewStates[lead.id]?.status === "accepted";
   const [screenshots, setScreenshots] = useState<File[]>([]);
   const [sendingTelegram, setSendingTelegram] = useState(false);
   const [telegramMessage, setTelegramMessage] = useState("");
@@ -39,7 +42,7 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
   useEffect(() => { setScreenshots([]); load(); }, [lead.id]);
 
   async function sendForReview() {
-    if (sendingTelegram) return;
+    if (sendingTelegram || accepted) return;
     setSendingTelegram(true);
     setTelegramMessage("");
     try {
@@ -59,6 +62,7 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
         return;
       }
       setTelegramMessage(result.logged ? "Лид отправлен в Telegram на проверку" : "Лид отправлен, но запись в истории не сохранилась. Повторно отправлять не нужно.");
+      if (!result.buttonsReady) setTelegramMessage("Карточка отправлена, но кнопки проверки не включены. Проверьте D1 и секреты, затем подключите Telegram во вкладке «Менеджеры».");
       await load();
     } catch (error) {
       setTelegramMessage(error instanceof Error ? error.message : "Не удалось отправить лид");
@@ -105,6 +109,8 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
         <ArrowLeft className="w-4 h-4" /> Назад к лидам
       </button>
 
+      {reviewStates[lead.id] && <p role="status" className="rounded-xl bg-amber-50 text-amber-900 p-4 font-medium">{reviewStates[lead.id].label}</p>}
+      {reviewError && <p role="alert" className="text-red-600 text-sm">{reviewError}</p>}
       <div className="bg-panel border border-c rounded-2xl p-4 sm:p-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-start gap-3 min-w-0">
@@ -128,7 +134,7 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
         {lead.note && <p className="mt-4 pt-4 border-t border-c text-sm text-dim">{lead.note}</p>}
 
         <div className="mt-5 space-y-2">
-          <button type="button" onClick={() => void sendForReview()} disabled={sendingTelegram}
+          <button type="button" onClick={() => void sendForReview()} disabled={sendingTelegram || accepted}
             className="inline-flex items-center gap-2 bg-[#2563eb] text-white rounded-lg px-4 py-2 text-sm cursor-pointer hover:bg-[#1d4ed8] disabled:opacity-50 disabled:cursor-not-allowed">
             <Send className="w-4 h-4" />
             {sendingTelegram ? "Отправляем…" : "Отправить в Telegram на проверку"}
