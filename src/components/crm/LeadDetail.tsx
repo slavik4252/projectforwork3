@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase, type Lead, type LeadStatus, type Note, type Deal, type Activity } from "@/lib/supabase";
+import LeadEvidence from "./LeadEvidence";
 import { StatusBadge } from "./Dashboard";
 import { sendLeadToTelegram } from "@/lib/telegram-review.functions";
 import { ArrowLeft, Plus, Trash2, Phone, Mail, Send, MessageCircle, StickyNote } from "lucide-react";
@@ -141,6 +142,8 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
           </div>
         </div>
       </div>
+
+      <LeadEvidence key={lead.id} leadId={lead.id} />
 
       <div className="grid lg:grid-cols-2 gap-5">
         <div className="bg-panel border border-c rounded-2xl p-5 space-y-4">
