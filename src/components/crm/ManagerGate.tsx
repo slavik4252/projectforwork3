@@ -57,7 +57,7 @@ export default function ManagerGate({ children }: { children: ReactNode }) {
     try {
       const value = code.trim();
       const credentials = /^https?:/i.test(value)
-        ? parseManagerEmailLink(value)
+        ? await parseManagerEmailLink(value)
         : { email: email.trim().toLowerCase(), token: value, type: "email" as const };
       const { error } = await supabase.auth.verifyOtp(credentials);
       setCode("");
