@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase, type Lead, type LeadStatus } from "@/lib/supabase";
+import { useReviewStates } from "./useReviewStates";
 import { useLeadsLive } from "./useLeadsLive";
 
 const STAGES: { id: LeadStatus; label: string; color: string }[] = [
@@ -21,6 +22,7 @@ function contactChannel(lead: Lead) {
 
 export default function DealsBoard() {
   const [leads, setLeads] = useState<Lead[]>([]);
+  const { states: reviews, error: reviewError } = useReviewStates(leads.map(lead => lead.id));
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -77,12 +79,13 @@ export default function DealsBoard() {
           {refreshing ? "Обновляем…" : "Обновить"}
         </button>
       </div>
+      {reviewError && <p role="alert" className="text-sm text-red-600">{reviewError}</p>}
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {loading && <p role="status" className="text-sm text-dim">Загрузка лидов…</p>}
       {!loading && leads.length === 0 && !error && <p className="text-sm text-dim">Заявок пока нет. Новые заявки появятся здесь.</p>}
       <div className="flex gap-3 overflow-x-auto pb-4 snap-x snap-proximity">
         {STAGES.map(stage => {
-          const items = leads.filter(lead => lead.status === stage.id);
+          const items = leads.filter(lead => lead.status === stage.id && reviews[lead.id]?.status !== "accepted");
           return (
             <section key={stage.id} aria-label={stage.label}
               onDragOver={event => event.preventDefault()}
@@ -99,6 +102,7 @@ export default function DealsBoard() {
                   <article key={lead.id} draggable={!saving}
                     onDragStart={() => setDragId(lead.id)} onDragEnd={() => setDragId(null)}
                     className="bg-panel border border-c rounded-xl p-3 space-y-2 cursor-grab active:cursor-grabbing">
+                    {reviews[lead.id] && <p className="text-xs bg-amber-50 text-amber-900 rounded-lg p-2">{reviews[lead.id].label}</p>}
                     <h4 className="text-sm font-semibold break-words">{lead.name || "Без имени"}</h4>
                     <p className="text-xs text-dim whitespace-pre-wrap break-words"><span className="font-medium">Ниша: </span>{niche(lead)}</p>
                     <p className="text-xs break-words"><span className="text-dim">{contactChannel(lead)}: </span>{lead.contact || "Не указан"}</p>
