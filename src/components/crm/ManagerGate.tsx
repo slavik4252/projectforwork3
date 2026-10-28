@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { parseManagerEmailLink } from "@/lib/manager-email-link";
 
 type State = "loading" | "signedOut" | "notManager" | "manager";
 
@@ -53,13 +54,20 @@ export default function ManagerGate({ children }: { children: ReactNode }) {
   async function verify(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setMsg("");
-    const { error } = await supabase.auth.verifyOtp({
-      email: email.trim().toLowerCase(),
-      token: code.trim(),
-      type: "email",
-    });
-    setBusy(false);
-    if (error) setMsg("Неверный или просроченный код");
+    try {
+      const value = code.trim();
+      const credentials = /^https?:/i.test(value)
+        ? parseManagerEmailLink(value)
+        : { email: email.trim().toLowerCase(), token: value, type: "email" as const };
+      const { error } = await supabase.auth.verifyOtp(credentials);
+      setCode("");
+      if (error) setMsg("Ссылка или код недействительны либо уже использованы. Запросите новое письмо и скопируйте ссылку, не открывая её.");
+    } catch (error) {
+      setCode("");
+      setMsg(error instanceof Error ? error.message : "Не удалось выполнить вход");
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (state === "loading") return <p className="text-dim text-sm">Загрузка…</p>;
@@ -84,8 +92,8 @@ export default function ManagerGate({ children }: { children: ReactNode }) {
         </form>
       ) : (
         <form onSubmit={verify} className="space-y-3">
-          <p className="text-sm text-dim">Код отправлен на {email}. Проверьте также «Спам».</p>
-          <input className={input} inputMode="numeric" required placeholder="Код из письма"
+          <p className="text-sm text-dim">Письмо отправлено на {email}. Если кнопка ведёт на старый сайт, нажмите на неё правой кнопкой, выберите «Копировать ссылку» и вставьте ниже, не открывая её. Также можно ввести код из письма.</p>
+          <input className={input} type="password" autoComplete="off" spellCheck={false} required maxLength={4096} aria-label="Код или ссылка входа из письма" placeholder="Код или ссылка из письма"
             value={code} onChange={(e) => setCode(e.target.value)} />
           <button className={btn} disabled={busy}>Войти</button>
           <button type="button" className="text-sm text-dim underline" onClick={() => setStep("email")}>
