@@ -31,7 +31,7 @@ export default function Managers() {
 
   return (
     <div className="max-w-xl space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-xl font-semibold">Менеджеры</h2>
         <button className="text-sm text-dim underline" onClick={() => supabase.auth.signOut()}>
           Выйти ({me})
@@ -40,19 +40,19 @@ export default function Managers() {
       <p className="text-sm text-dim">
         Только эти почты могут входить в CRM по коду из письма.
       </p>
-      <form onSubmit={add} className="flex gap-2">
+      <form onSubmit={add} className="flex flex-col sm:flex-row gap-2">
         <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
           placeholder="new.manager@company.ru"
-          className="flex-1 rounded-lg border border-c bg-panel px-3.5 py-2.5 text-sm outline-none" />
-        <button className="rounded-lg bg-[#2563eb] text-white text-sm font-medium px-4">Добавить</button>
+          className="min-w-0 flex-1 rounded-lg border border-c bg-panel px-3.5 py-2.5 text-base sm:text-sm outline-none" />
+        <button className="rounded-lg bg-[#2563eb] text-white text-sm font-medium px-4 min-h-11 cursor-pointer">Добавить</button>
       </form>
       {msg && <p className="text-sm text-red-600">{msg}</p>}
       <ul className="divide-y divide-[#e3eaf3] rounded-lg border border-c bg-panel">
         {list.map((m) => (
           <li key={m.email} className="flex items-center justify-between px-4 py-3 text-sm">
-            <span>{m.email}{m.email === me && <span className="text-dim"> (вы)</span>}</span>
+            <span className="min-w-0 break-all">{m.email}{m.email === me && <span className="text-dim"> (вы)</span>}</span>
             {m.email !== me && (
-              <button onClick={() => remove(m.email)} aria-label="Удалить" className="text-dim hover:text-red-600">
+              <button onClick={() => remove(m.email)} aria-label="Удалить" className="min-h-11 min-w-11 shrink-0 grid place-items-center text-dim hover:text-red-600 cursor-pointer">
                 <Trash2 className="w-4 h-4" />
               </button>
             )}
