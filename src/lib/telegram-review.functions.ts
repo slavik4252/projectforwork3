@@ -28,20 +28,30 @@ export const sendLeadToTelegram = createServerFn({ method: "POST" })
     const leadResult = await db.from("leads").select("id,name,contact,source,note").eq("id", data.leadId).single();
     if (leadResult.error || !leadResult.data) throw new Error("Лид не найден");
     const lead = leadResult.data;
+    const escape = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const field = (value: string | null | undefined, limit = 300) => escape((value?.trim() || "Не указано").slice(0, limit));
+    const info = (lead.note || "").replace(/^(Интерес|Ниша):\\s*/i, "").trim();
     const text = [
-      "Лид на проверку",
-      `Имя: ${lead.name || "Не указано"}`,
-      `Связь: ${lead.contact || "Не указана"}`,
-      `Канал: ${lead.source || "Не указан"}`,
-      `Ниша и информация: ${lead.note || "Не указана"}`,
-      `Менеджер: ${user.data.user.email || user.data.user.id}`,
-      `ID лида: ${lead.id}`,
-    ].join("\n").slice(0, 4000);
+      "📥 <b>Новый лид на проверку</b>",
+      "",
+      `👤 <b>${field(lead.name, 200)}</b>`,
+      `📌 <b>Канал:</b> ${field(lead.source, 60)}`,
+      `📞 <b>Контакт:</b> <code>${field(lead.contact, 500)}</code>`,
+      "",
+      "💬 <b>О клиенте и его запросе</b>",
+      field(info, 1400),
+      "",
+      "━━━━━━━━━━━━━━━━━━",
+      `👨‍💼 <b>Передал:</b> ${field(user.data.user.email, 200)}`,
+      "🕓 <i>Ожидает проверки</i>",
+      "",
+      "Проверьте потребность клиента и результат общения в CRM.",
+    ].join("\n");
     let response: Response;
     try {
       response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, text, link_preview_options: { is_disabled: true } }),
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", reply_markup: { inline_keyboard: [[{ text: "📋 Открыть CRM", url: "https://projectforwork3.vibetivyko.workers.dev/?crm=1" }]] }, link_preview_options: { is_disabled: true } }),
         signal: AbortSignal.timeout(15000),
       });
     } catch { throw new Error("Нет подтверждения доставки Telegram. Перед повтором проверьте чат, чтобы не отправить дубль."); }
