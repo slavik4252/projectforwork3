@@ -1,9 +1,24 @@
-import { createClient } from "@supabase/supabase-js";
 export const REVIEW_TYPES = ["telegram_review", "review_accepted", "review_needs_info"];
-export function reviewDb() {
-  const key = process.env["SUPABASE_SERVICE_ROLE_KEY"];
-  if (!key) throw new Error("Для проверки лидов нужен серверный SUPABASE_SERVICE_ROLE_KEY");
-  return createClient(import.meta.env.VITE_SUPABASE_URL, key, { auth: { persistSession: false, autoRefreshToken: false } });
+type Statement = {
+  bind(...values: unknown[]): Statement;
+  first<T = Record<string, any>>(): Promise<T | null>;
+  all<T = Record<string, any>>(): Promise<{results: T[]}>;
+  run(): Promise<{meta:{changes:number}}>;
+};
+type ReviewDatabase = { exec(sql:string): Promise<unknown>; prepare(sql:string):Statement };
+export async function reviewDb() {
+  // @ts-ignore Provided by Cloudflare Workers at runtime.
+  const {env} = await import("cloudflare:workers");
+  const db = env.LEAD_REVIEWS as ReviewDatabase | undefined;
+  if (!db) throw new Error("Подключите D1 binding LEAD_REVIEWS");
+  await db.exec("CREATE TABLE IF NOT EXISTS lead_reviews (id TEXT PRIMARY KEY, lead_id TEXT NOT NULL, type TEXT NOT NULL, description TEXT NOT NULL, created_at INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS lead_reviews_lead ON lead_reviews(lead_id, created_at)");
+  return db;
+}
+export async function registerReview(id:string, leadId:string, metadata:Record<string,unknown>) {
+  const db = await reviewDb();
+  const accepted = await db.prepare("SELECT id FROM lead_reviews WHERE lead_id=? AND type='review_accepted' LIMIT 1").bind(leadId).first();
+  if (accepted) throw new Error("Этот лид уже принят");
+  await db.prepare("INSERT INTO lead_reviews(id,lead_id,type,description,created_at) VALUES(?,?,'telegram_review',?,?)").bind(id,leadId,JSON.stringify(metadata),Date.now()).run();
 }
 export async function telegram(method: string, body: Record<string, unknown>) {
   const token = process.env["TELEGRAM_BOT_TOKEN"];
@@ -15,23 +30,6 @@ export async function telegram(method: string, body: Record<string, unknown>) {
   if (!response.ok || !result.ok) throw new Error("Не удалось выполнить действие Telegram");
   return result.result;
 }
-async function signature(id: string, type: string) {
-  const secret = process.env["TELEGRAM_WEBHOOK_SECRET"];
-  if (!secret) throw new Error("Не настроен TELEGRAM_WEBHOOK_SECRET");
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const bytes = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(id + ":" + type));
-  return Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2,"0")).join("");
-}
-export async function signedDecision(id: string, type: string, info: Record<string, unknown>) {
-  return JSON.stringify({ ...info, signature: await signature(id,type) });
-}
-export async function verifiedDecision(row: { id: string; type: string; description: string }) {
-  try {
-    const data = JSON.parse(row.description);
-    return data.signature === await signature(row.id, row.type);
-  } catch { return false; }
-}
-
 export async function handleTelegramWebhook(request: Request) {
   const secret = process.env["TELEGRAM_WEBHOOK_SECRET"];
   if (!secret || request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== secret) return new Response("Forbidden", {status:403});
@@ -48,25 +46,24 @@ export async function handleTelegramWebhook(request: Request) {
   const match = /^lr:(a|i):([0-9a-f-]{36})$/i.exec(query.data || "");
   if (!match) { await answer("Неизвестная команда"); return new Response("OK"); }
   try {
-    const db = reviewDb();
-    const item = await db.from("activities").select("*").eq("id",match[2]).single();
-    if (item.error || !item.data) { await answer("Заявка на проверку не найдена"); return new Response("OK"); }
-    const record = item.data;
+    const db = await reviewDb();
+    const item = await db.prepare("SELECT * FROM lead_reviews WHERE id=?").bind(match[2]).first();
+    if (!item) { await answer("Заявка на проверку не найдена"); return new Response("OK"); }
+    const record = item;
     let metadata;
     try { metadata = JSON.parse(record.description); } catch { await answer("Отправьте лид на проверку заново"); return new Response("OK"); }
     if (metadata.messageId !== query.message.message_id || String(metadata.chatId) !== chatId) {
       await answer("Сообщение не относится к этой проверке"); return new Response("OK");
     }
-    const latest = await db.from("activities").select("id").eq("lead_id",record.lead_id).in("type", REVIEW_TYPES).order("created_at",{ascending:false}).limit(1).single();
-    if (latest.error) throw new Error("Read failed");
-    if (latest.data?.id !== record.id || record.type !== "telegram_review") {
+    const latest = await db.prepare("SELECT id FROM lead_reviews WHERE lead_id=? ORDER BY created_at DESC, id DESC LIMIT 1").bind(record.lead_id).first();
+    if (latest?.id !== record.id || record.type !== "telegram_review") {
       await answer("Эта проверка уже завершена или отправлена новая версия"); return new Response("OK");
     }
     const type = match[1] === "a" ? "review_accepted" : "review_needs_info";
-    const description = await signedDecision(record.id,type,{...metadata, reviewer, decidedAt:new Date().toISOString()});
-    const saved = await db.from("activities").update({type,description}).eq("id",record.id).eq("type","telegram_review").select("id").maybeSingle();
-    if (saved.error) throw new Error("Save failed");
-    if (!saved.data) { await answer("Решение уже принято"); return new Response("OK"); }
+    const description = JSON.stringify({...metadata,reviewer,decidedAt:new Date().toISOString()});
+    const saved = await db.prepare("UPDATE lead_reviews SET type=?,description=? WHERE id=? AND type='telegram_review' AND id=(SELECT id FROM lead_reviews WHERE lead_id=? ORDER BY created_at DESC,id DESC LIMIT 1)")
+      .bind(type,description,record.id,record.lead_id).run();
+    if (!saved.meta.changes) { await answer("Решение уже принято"); return new Response("OK"); }
     await answer(type === "review_accepted" ? "Лид принят и перенесён в проверенные" : "Лид возвращён: нужна дополнительная информация");
     await telegram("editMessageReplyMarkup", {chat_id:chatId,message_id:query.message.message_id,reply_markup:{inline_keyboard:[[{text:type === "review_accepted" ? "✅ Принят · открыть заявку" : "📝 Нужна информация · открыть заявку",url:`https://projectforwork3.vibetivyko.workers.dev/?crm=1&lead=${record.lead_id}`}]]}});
     return new Response("OK");
