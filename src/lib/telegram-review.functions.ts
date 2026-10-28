@@ -87,9 +87,26 @@ export const sendLeadToTelegram = createServerFn({ method: "POST" })
         attachmentsSent++;
       } catch { attachmentError = true; break; }
     }
+    const reviewEnabled = !!process.env["SUPABASE_SERVICE_ROLE_KEY"] && !!process.env["TELEGRAM_WEBHOOK_SECRET"];
+    const logId = crypto.randomUUID();
+    let description = `Лид отправлен в Telegram на проверку. Менеджер: ${user.data.user.email || user.data.user.id}`;
+    if (reviewEnabled) {
+      const {signedDecision} = await import("./telegram-review.server");
+      description = await signedDecision(logId,"telegram_review",{messageId:result.result.message_id,chatId});
+    }
     const logged = await db.from("activities").insert({
-      lead_id: lead.id, type: "telegram_review",
-      description: `Лид отправлен в Telegram на проверку. Менеджер: ${user.data.user.email || user.data.user.id}`,
+      id:logId, lead_id: lead.id, type:"telegram_review", description,
     });
-    return { sent: true, logged: !logged.error, attachmentsSent, attachmentError };
+    let buttonsReady = false;
+    if (reviewEnabled && !logged.error && !attachmentError) {
+      try {
+        const {telegram} = await import("./telegram-review.server");
+        await telegram("editMessageReplyMarkup", {chat_id:chatId,message_id:result.result.message_id,reply_markup:{inline_keyboard:[
+          [{text:"✅ Принять",callback_data:`lr:a:${logId}`},{text:"📝 Нужна информация",callback_data:`lr:i:${logId}`}],
+          [{text:"📋 Открыть заявку",url:`https://projectforwork3.vibetivyko.workers.dev/?crm=1&lead=${lead.id}`}]
+        ]}});
+        buttonsReady = true;
+      } catch { /* card and files were already delivered; report configuration issue */ }
+    }
+    return { sent: true, logged: !logged.error, attachmentsSent, attachmentError, buttonsReady };
   });
