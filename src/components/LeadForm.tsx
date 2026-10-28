@@ -10,7 +10,7 @@ export default function LeadForm() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
 
-  const channels = ["Telegram", "WhatsApp", "Email", "Max"];
+  const channels = ["Telegram", "Email", "Max", "Телефон", "WhatsApp"];
   const [channel, setChannel] = useState(channels[0]);
 
   async function submit(e: React.FormEvent) {
@@ -77,7 +77,7 @@ export default function LeadForm() {
           required
           value={contact}
           onChange={(e) => setContact(e.target.value)}
-          placeholder="Телефон, email или Telegram"
+          placeholder="Email, Telegram @username, Max или номер телефона"
           className="w-full bg-input border border-c rounded-xl px-4 py-3 text-sm placeholder:text-[#94a3b8] focus:outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/15 transition"
         />
         <select
@@ -92,7 +92,7 @@ export default function LeadForm() {
         <textarea
           value={source}
           onChange={(e) => setSource(e.target.value)}
-          placeholder="Коротко о бизнесе (ниша, что продаёте)"
+          placeholder="Ниша бизнеса: чем занимаетесь, что продаёте"
           rows={2}
           className="w-full bg-input border border-c rounded-xl px-4 py-3 text-sm placeholder:text-[#94a3b8] focus:outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/15 transition resize-none"
         />
