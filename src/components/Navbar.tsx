@@ -34,7 +34,7 @@ export default function Navbar({ onCrmClick }: { onCrmClick: () => void }) {
           </span>
         </a>
 
-        <div className="hidden md:flex items-center gap-8">
+        <div className="hidden lg:flex items-center gap-5">
           {links.map((l) => (
             <a
               key={l.href}
@@ -46,7 +46,7 @@ export default function Navbar({ onCrmClick }: { onCrmClick: () => void }) {
           ))}
         </div>
 
-        <div className="hidden md:flex items-center gap-3">
+        <div className="hidden lg:flex items-center gap-3">
           <button
             onClick={onCrmClick}
             className="text-sm font-medium text-dim hover:text-[#0b1626] transition-colors"
@@ -62,16 +62,16 @@ export default function Navbar({ onCrmClick }: { onCrmClick: () => void }) {
         </div>
 
         <button
-          className="md:hidden p-2"
+          className="lg:hidden min-h-11 min-w-11 p-2 cursor-pointer"
           onClick={() => setOpen((v) => !v)}
-          aria-label="Меню"
+          aria-label="Меню" aria-expanded={open}
         >
           {open ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
       </nav>
 
       {open && (
-        <div className="md:hidden bg-white border-b border-c px-5 py-4 space-y-3">
+        <div className="lg:hidden bg-white border-b border-c px-5 py-4 space-y-3">
           {links.map((l) => (
             <a
               key={l.href}
