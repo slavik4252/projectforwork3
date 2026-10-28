@@ -42,10 +42,14 @@ export default function ManagerGate({ children }: { children: ReactNode }) {
   async function sendCode(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setMsg("");
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim().toLowerCase(),
-      options: { shouldCreateUser: true, emailRedirectTo: window.location.origin },
-    });
+ const { error } = await supabase.auth.signInWithOtp({
+  email: email.trim().toLowerCase(),
+  options: { 
+    shouldCreateUser: true, 
+    emailRedirectTo: "https://projectforwork3.vibetivyko.workers.dev/" 
+  },
+});
+    
     setBusy(false);
     if (error) return setMsg(error.message);
     setStep("code");
