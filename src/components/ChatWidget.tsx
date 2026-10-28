@@ -104,11 +104,11 @@ export default function ChatWidget() {
       </button>
 
       <div
-        className={`fixed bottom-5 right-5 z-[60] w-[calc(100vw-2.5rem)] max-w-[400px] origin-bottom-right transition-all duration-300 ${
+        className={`fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] right-3 sm:right-5 z-[60] w-[calc(100vw-1.5rem)] sm:w-[400px] max-w-[400px] origin-bottom-right transition-all duration-300 ${
           open ? "scale-100 opacity-100" : "scale-90 opacity-0 pointer-events-none"
         }`}
       >
-        <div className="bg-panel border border-c rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[560px] max-h-[80vh]">
+        <div className="bg-panel border border-c rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[560px] max-h-[calc(100dvh-6rem)]">
           {/* header */}
           <div className="flex items-center justify-between px-4 py-3.5 border-b border-c bg-gradient-to-r from-[#2563eb] to-[#0d9488]">
             <div className="flex items-center gap-2.5">
@@ -133,11 +133,11 @@ export default function ChatWidget() {
           </div>
 
           {/* messages */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-page">
+          <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 space-y-3 bg-page">
             {messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div
-                  className={`max-w-[82%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                  className={`break-words min-w-0 max-w-[88%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
                     m.role === "user"
                       ? "bg-[#2563eb] text-white rounded-br-sm"
                       : "bg-panel border border-c text-[#0b1626] rounded-bl-sm"
@@ -171,7 +171,7 @@ export default function ChatWidget() {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Напишите сообщение…"
                 disabled={busy}
-                className="flex-1 bg-page border border-c rounded-xl px-3.5 py-2.5 text-sm placeholder:text-[#94a3b8] focus:outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/15 transition"
+                className="min-w-0 flex-1 bg-page border border-c rounded-xl px-3.5 py-2.5 text-base sm:text-sm placeholder:text-[#94a3b8] focus:outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/15 transition"
               />
               <button
                 type="submit"
