@@ -229,3 +229,15 @@ a[href*="bolt.run"],
   opacity: 0 !important;
   pointer-events: none !important;
 }
+/* Touch layouts and readable form controls on phones and tablets. */
+html { -webkit-text-size-adjust: 100%; }
+section[id], form[id] { scroll-margin-top: 5rem; }
+button, a, select { touch-action: manipulation; }
+img { max-width: 100%; }
+@media (max-width: 1023px) {
+  input:not([type="checkbox"]):not([type="radio"]), textarea, select { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .fade-up, .pulse-dot { animation: none; }
+}
