@@ -9,14 +9,14 @@ export default function Hero() {
       <div className="absolute -top-40 -left-32 w-[520px] h-[520px] rounded-full bg-[#2563eb]/15 blur-[120px]" />
       <div className="absolute -top-20 right-0 w-[460px] h-[460px] rounded-full bg-[#0d9488]/15 blur-[120px]" />
 
-      <div className="relative max-w-7xl mx-auto px-5 lg:px-8 grid lg:grid-cols-[1.1fr_1fr] gap-12 items-center">
-        <div className="fade-up">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#2563eb]/10 border border-[#2563eb]/25 text-xs text-[#2563eb] mb-6">
+      <div className="relative max-w-7xl mx-auto px-5 lg:px-8 grid lg:grid-cols-[1.1fr_1fr] gap-8 sm:gap-12 items-center">
+        <div className="fade-up min-w-0">
+          <div className="inline-flex max-w-full items-center gap-2 px-3 py-1.5 rounded-full bg-[#2563eb]/10 border border-[#2563eb]/25 text-xs text-[#2563eb] mb-6">
             <Sparkles className="w-3.5 h-3.5" />
             ИИ-агент квалифицирует заявки за вас
           </div>
 
-          <h1 className="font-display text-4xl sm:text-5xl lg:text-[3.5rem] leading-[1.08] font-extrabold tracking-tight">
+          <h1 className="font-display text-[1.85rem] min-[400px]:text-4xl sm:text-5xl lg:text-[3.5rem] leading-[1.08] font-extrabold tracking-tight">
             Лидогенерация под ключ: ИИ-агент пишет клиентам, квалифицирует и
             передаёт <span className="bg-gradient-to-r from-[#2563eb] to-[#0d9488] bg-clip-text text-transparent">тёплые заявки</span> в вашу CRM
           </h1>
@@ -43,7 +43,7 @@ export default function Hero() {
             </a>
           </div>
 
-          <div className="flex items-center gap-6 mt-10 text-xs text-dim">
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6 mt-10 text-xs text-dim">
             <div className="flex items-center gap-2">
               <MessageSquareText className="w-4 h-4 text-[#2563eb]" />
               3 канала связи
