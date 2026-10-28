@@ -62,17 +62,17 @@ export default function CrmPanel({ open, onClose }: { open: boolean; onClose: ()
     >
       <div className="absolute inset-0 bg-[#0b1626]/40 backdrop-blur-sm" onClick={onClose} />
       <div
-        className={`absolute right-0 top-0 h-full w-full max-w-5xl bg-page border-l border-c shadow-2xl overflow-y-auto transition-transform duration-300 ${
+        className={`absolute right-0 top-0 h-[100dvh] w-full max-w-5xl overscroll-contain bg-page border-l border-c shadow-2xl overflow-y-auto transition-transform duration-300 ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        <div className="sticky top-0 z-10 bg-panel/95 backdrop-blur border-b border-c px-5 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="sticky top-0 z-10 bg-panel/95 backdrop-blur border-b border-c px-3 sm:px-5 py-2 sm:py-3 flex items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2 overflow-x-auto">
             {tabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => { clearLink(); setTab(t.id); setSelected(null); }}
-                className={`inline-flex items-center gap-2 text-sm font-medium px-3.5 py-2 rounded-lg transition-colors ${
+                className={`shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium px-2.5 sm:px-3.5 min-h-11 py-2 cursor-pointer rounded-lg transition-colors ${
                   tab === t.id ? "bg-[#2563eb]/10 text-[#2563eb]" : "text-dim hover:text-[#0b1626]"
                 }`}
               >
@@ -83,14 +83,14 @@ export default function CrmPanel({ open, onClose }: { open: boolean; onClose: ()
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-dim hover:text-[#0b1626] rounded-lg hover:bg-[#eef3fa]"
+            className="shrink-0 min-h-11 min-w-11 p-2 text-dim hover:text-[#0b1626] rounded-lg hover:bg-[#eef3fa]"
             aria-label="Закрыть CRM"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div key={openCount} className="p-5 lg:p-7">
+        <div key={openCount} className="p-3 sm:p-5 lg:p-7 min-w-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <ManagerGate>
           {linkedId ? <LinkedLead id={linkedId} onBack={() => { clearLink(); setTab("leads"); }} /> : <>
           {tab === "dashboard" && <Dashboard onOpenLeads={() => setTab("leads")} />}
