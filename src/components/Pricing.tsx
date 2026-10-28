@@ -61,11 +61,11 @@ export default function Pricing() {
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-4">
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5 md:gap-6">
           {tiers.map((t) => (
             <div
               key={t.name}
-              className={`relative rounded-2xl p-7 border ${
+              className={`relative rounded-2xl p-5 sm:p-7 border min-w-0 ${
                 t.highlight
                   ? "bg-gradient-to-b from-[#2563eb]/8 to-white border-[#2563eb]/40 glow-ring"
                   : "bg-panel border-c"
@@ -78,7 +78,7 @@ export default function Pricing() {
               )}
               <h3 className="font-display font-bold text-lg">{t.name}</h3>
               <p className="text-dim text-sm mt-1 mb-5">{t.subtitle}</p>
-              <div className="flex items-baseline gap-1.5 mb-6">
+              <div className="flex flex-wrap items-baseline gap-1.5 mb-6">
                 <span className="font-display text-3xl font-extrabold">{t.price}</span>
                 <span className="text-dim text-sm">{t.unit}</span>
               </div>
