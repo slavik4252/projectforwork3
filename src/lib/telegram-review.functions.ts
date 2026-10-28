@@ -30,7 +30,7 @@ export const sendLeadToTelegram = createServerFn({ method: "POST" })
     const lead = leadResult.data;
     const escape = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const field = (value: string | null | undefined, limit = 300) => escape((value?.trim() || "Не указано").slice(0, limit));
-    const info = (lead.note || "").replace(/^(Интерес|Ниша):\\s*/i, "").trim();
+    const info = (lead.note || "").replace(/^(Интерес|Ниша):\s*/i, "").trim();
     const text = [
       "📥 <b>Новый лид на проверку</b>",
       "",
@@ -51,7 +51,7 @@ export const sendLeadToTelegram = createServerFn({ method: "POST" })
     try {
       response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", reply_markup: { inline_keyboard: [[{ text: "📋 Открыть CRM", url: "https://projectforwork3.vibetivyko.workers.dev/?crm=1" }]] }, link_preview_options: { is_disabled: true } }),
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", reply_markup: { inline_keyboard: [[{ text: "📋 Открыть заявку", url: `https://projectforwork3.vibetivyko.workers.dev/?crm=1&lead=${encodeURIComponent(lead.id)}` }]] }, link_preview_options: { is_disabled: true } }),
         signal: AbortSignal.timeout(15000),
       });
     } catch { throw new Error("Нет подтверждения доставки Telegram. Перед повтором проверьте чат, чтобы не отправить дубль."); }
