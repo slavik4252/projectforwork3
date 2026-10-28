@@ -66,7 +66,7 @@ export default function DealsBoard() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col sm:flex-row items-start justify-between gap-3">
         <div>
           <h2 className="font-display text-2xl font-bold">Сделки и лиды</h2>
           <p className="text-dim text-sm mt-1">Все заявки на одной доске. Перетащите карточку или выберите этап в её меню.</p>
@@ -80,14 +80,14 @@ export default function DealsBoard() {
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {loading && <p role="status" className="text-sm text-dim">Загрузка лидов…</p>}
       {!loading && leads.length === 0 && !error && <p className="text-sm text-dim">Заявок пока нет. Новые заявки появятся здесь.</p>}
-      <div className="flex gap-3 overflow-x-auto pb-4">
+      <div className="flex gap-3 overflow-x-auto pb-4 snap-x snap-proximity">
         {STAGES.map(stage => {
           const items = leads.filter(lead => lead.status === stage.id);
           return (
             <section key={stage.id} aria-label={stage.label}
               onDragOver={event => event.preventDefault()}
               onDrop={event => { event.preventDefault(); if (dragId) void moveStage(dragId, stage.id); }}
-              className="bg-soft border border-c rounded-2xl p-3 min-h-[240px] min-w-[220px] flex-1">
+              className="bg-soft border border-c rounded-2xl p-3 min-h-[240px] w-[82vw] max-w-[320px] shrink-0 sm:w-[260px] sm:max-w-none snap-start">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="flex items-center gap-2 text-xs font-semibold">
                   <span className="w-2 h-2 rounded-full" style={{ background: stage.color }} />{stage.label}
@@ -106,7 +106,7 @@ export default function DealsBoard() {
                       Этап
                       <select value={lead.status} disabled={saving} aria-label={`Этап лида ${lead.name || "Без имени"}`}
                         onChange={event => void moveStage(lead.id, event.target.value as LeadStatus)}
-                        className="block mt-1 w-full bg-panel border border-c rounded-lg px-2 py-2 text-xs">
+                        className="block mt-1 min-h-11 w-full bg-panel border border-c rounded-lg px-2 py-2 text-xs">
                         {STAGES.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
                       </select>
                     </label>
