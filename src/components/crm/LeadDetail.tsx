@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase, type Lead, type LeadStatus, type Note, type Deal, type Activity } from "@/lib/supabase";
 import { useReviewStates } from "./useReviewStates";
+import LeadScripts from "./LeadScripts";
 import LeadEvidence from "./LeadEvidence";
 import { StatusBadge } from "./Dashboard";
 import { sendLeadToTelegram } from "@/lib/telegram-review.functions";
@@ -162,6 +163,8 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
           </div>
         </div>
       </div>
+
+      <LeadScripts key={lead.id+"-scripts"} lead={lead} />
 
       <LeadEvidence files={screenshots} onChange={setScreenshots} disabled={sendingTelegram} />
 
