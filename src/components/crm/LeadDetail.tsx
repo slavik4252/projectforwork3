@@ -61,8 +61,9 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
         await load();
         return;
       }
-      setTelegramMessage(result.logged ? "Лид отправлен в Telegram на проверку" : "Лид отправлен, но запись в истории не сохранилась. Повторно отправлять не нужно.");
-      if (!result.buttonsReady) setTelegramMessage("Карточка отправлена, но кнопки проверки не включены. Проверьте D1 и секреты, затем подключите Telegram во вкладке «Менеджеры».");
+      const verdict=result.aiReview.status==="passed" ? "ИИ: проверка пройдена." : result.aiReview.status==="needs_info" ? "Нужна дополнительная информация." : "Требуется ручная проверка.";
+      setTelegramMessage(verdict+" "+result.aiReview.reason+(result.logged ? " Отчёт отправлен в Telegram." : " Отчёт отправлен, но запись истории не сохранилась."));
+      if (!result.buttonsReady) setTelegramMessage("Отчёт отправлен, но результат проверки на сайте не подтверждён. Проверьте D1 и секреты; не считайте лид автоматически выполненным.");
       await load();
     } catch (error) {
       setTelegramMessage(error instanceof Error ? error.message : "Не удалось отправить лид");
@@ -109,7 +110,7 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
         <ArrowLeft className="w-4 h-4" /> Назад к лидам
       </button>
 
-      {reviewStates[lead.id] && <p role="status" className="rounded-xl bg-amber-50 text-amber-900 p-4 font-medium">{reviewStates[lead.id].label}</p>}
+      {reviewStates[lead.id] && <p role="status" className="rounded-xl bg-amber-50 text-amber-900 p-4 font-medium">{reviewStates[lead.id].label}{reviewStates[lead.id].reason && <span className="block mt-2 text-sm font-normal">{reviewStates[lead.id].reason}</span>}</p>}
       {reviewError && <p role="alert" className="text-red-600 text-sm">{reviewError}</p>}
       <div className="bg-panel border border-c rounded-2xl p-4 sm:p-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
