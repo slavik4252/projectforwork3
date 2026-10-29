@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Users, KanbanSquare, X, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Users, KanbanSquare, X, ShieldCheck, PanelRightClose, PanelLeftOpen } from "lucide-react";
 import Dashboard from "./Dashboard";
 import LeadsList from "./LeadsList";
 import LeadDetail from "./LeadDetail";
@@ -33,6 +33,14 @@ export default function CrmPanel({ open, onClose }: { open: boolean; onClose: ()
   const [selected, setSelected] = useState<Lead | null>(null);
   const [openCount, setOpenCount] = useState(0);
   const [linkedId, setLinkedId] = useState<string | null>(null);
+  const [minimized, setMinimized] = useState(false);
+  useEffect(() => { if (open) setMinimized(false); }, [open]);
+  useEffect(() => {
+    if (!open || minimized) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [open, minimized]);
   useEffect(() => {
     if (!open) return;
     const id = new URLSearchParams(window.location.search).get("lead");
@@ -55,17 +63,22 @@ export default function CrmPanel({ open, onClose }: { open: boolean; onClose: ()
   ];
 
   return (
-    <div
-      className={`fixed inset-0 z-[70] transition-all duration-300 ${
-        open ? "opacity-100" : "opacity-0 pointer-events-none"
-      }`}
-    >
-      <div className="absolute inset-0 bg-[#0b1626]/40 backdrop-blur-sm" onClick={onClose} />
+    <>
+      {open && minimized && <button
+        onClick={() => setMinimized(false)}
+        className="fixed right-0 top-1/2 z-[80] -translate-y-1/2 flex items-center gap-2 rounded-l-xl bg-[#2563eb] px-3 py-4 text-white shadow-lg hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 cursor-pointer"
+        aria-label="Развернуть CRM"
+        title="Развернуть CRM"
+      ><PanelLeftOpen className="h-5 w-5" /><span>CRM</span></button>}
+    <div hidden={!open || minimized} className="fixed inset-0 z-[70]">
       <div
-        className={`absolute right-0 top-0 h-[100dvh] w-full max-w-5xl overscroll-contain bg-page border-l border-c shadow-2xl overflow-y-auto transition-transform duration-300 ${
-          open ? "translate-x-0" : "translate-x-full"
-        }`}
+        className="absolute inset-0 h-[100dvh] w-full overscroll-contain bg-page shadow-2xl overflow-y-auto"
       >
+        <button onClick={() => setMinimized(true)}
+          className="fixed right-0 top-1/2 z-20 -translate-y-1/2 rounded-l-xl border border-c bg-panel p-2 sm:p-3 text-[#2563eb] shadow-md hover:bg-blue-50 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2"
+          aria-label="Свернуть CRM" title="Свернуть CRM">
+          <PanelRightClose className="h-5 w-5" />
+        </button>
         <div className="sticky top-0 z-10 bg-panel/95 backdrop-blur border-b border-c px-3 sm:px-5 py-2 sm:py-3 flex items-center justify-between gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2 overflow-x-auto">
             {tabs.map((t) => (
@@ -83,14 +96,14 @@ export default function CrmPanel({ open, onClose }: { open: boolean; onClose: ()
           </div>
           <button
             onClick={onClose}
-            className="shrink-0 min-h-11 min-w-11 p-2 text-dim hover:text-[#0b1626] rounded-lg hover:bg-[#eef3fa]"
+            className="shrink-0 min-h-11 min-w-11 p-2 text-dim hover:text-[#0b1626] rounded-lg hover:bg-[#eef3fa] cursor-pointer"
             aria-label="Закрыть CRM"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div key={openCount} className="p-3 sm:p-5 lg:p-7 min-w-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div key={openCount} className="p-3 pr-12 sm:p-5 sm:pr-16 lg:p-7 lg:pr-20 min-w-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <ManagerGate>
           {linkedId ? <LinkedLead id={linkedId} onBack={() => { clearLink(); setTab("leads"); }} /> : <>
           {tab === "dashboard" && <Dashboard onOpenLeads={() => setTab("leads")} />}
@@ -103,5 +116,6 @@ export default function CrmPanel({ open, onClose }: { open: boolean; onClose: ()
         </div>
       </div>
     </div>
+    </>
   );
 }
