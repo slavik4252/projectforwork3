@@ -18,7 +18,9 @@ export async function registerReview(id:string, leadId:string, metadata:Record<s
   const db = await reviewDb();
   const accepted = await db.prepare("SELECT id FROM lead_reviews WHERE lead_id=? AND type='review_accepted' LIMIT 1").bind(leadId).first();
   if (accepted) throw new Error("Этот лид уже принят");
-  await db.prepare("INSERT INTO lead_reviews(id,lead_id,type,description,created_at) VALUES(?,?,'telegram_review',?,?)").bind(id,leadId,JSON.stringify(metadata),Date.now()).run();
+  const ai=metadata.aiReview as {status?:string}|undefined;
+  const type=ai?.status==="passed" ? "review_accepted" : ai?.status==="needs_info" ? "review_needs_info" : "telegram_review";
+  await db.prepare("INSERT INTO lead_reviews(id,lead_id,type,description,created_at) VALUES(?,?,?,?,?)").bind(id,leadId,type,JSON.stringify(metadata),Date.now()).run();
 }
 export async function telegram(method: string, body: Record<string, unknown>) {
   const token = process.env["TELEGRAM_BOT_TOKEN"];
