@@ -43,6 +43,9 @@ export const sendLeadToTelegram = createServerFn({ method: "POST" })
       prepared.push({ bytes, mime, name: image.name.slice(0,100) });
     }
     const lead = leadResult.data;
+    const {analyzeLeadReport}=await import("./ai-report-review.server");
+    const aiReview=await analyzeLeadReport(lead,images);
+
     const escape = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const field = (value: string | null | undefined, limit = 300) => escape((value?.trim() || "Не указано").slice(0, limit));
     const info = (lead.note || "").replace(/^(Интерес|Ниша):\s*/i, "").trim();
@@ -58,7 +61,9 @@ export const sendLeadToTelegram = createServerFn({ method: "POST" })
       "",
       "━━━━━━━━━━━━━━━━━━",
       `👨‍💼 <b>Передал:</b> ${field(user.data.user.email, 200)}`,
-      "🕓 <i>Ожидает проверки</i>",
+      `🤖 <b>${aiReview.status==="passed" ? "ИИ: проверка пройдена" : aiReview.status==="needs_info" ? "Нужна дополнительная информация" : "Требуется ручная проверка"}</b>`,
+      field(aiReview.reason,800),
+      "<i>Подлинность переписки по скриншотам не доказана.</i>",
       "",
       "Проверьте потребность клиента и результат общения в CRM.",
     ].join("\n");
@@ -97,13 +102,13 @@ export const sendLeadToTelegram = createServerFn({ method: "POST" })
     if (reviewEnabled && !logged.error && !attachmentError) {
       try {
         const {telegram,registerReview} = await import("./telegram-review.server");
-        await registerReview(logId,lead.id,{messageId:result.result.message_id,chatId});
+        await registerReview(logId,lead.id,{messageId:result.result.message_id,chatId,aiReview});
         await telegram("editMessageReplyMarkup", {chat_id:chatId,message_id:result.result.message_id,reply_markup:{inline_keyboard:[
-          [{text:"✅ Принять",callback_data:`lr:a:${logId}`},{text:"📝 Нужна информация",callback_data:`lr:i:${logId}`}],
+          ...(aiReview.status === "manual_review" ? [[{text:"✅ Принять вручную",callback_data:`lr:a:${logId}`},{text:"📝 Нужна информация",callback_data:`lr:i:${logId}`}]] : []),
           [{text:"📋 Открыть заявку",url:`https://projectforwork3.vibetivyko.workers.dev/?crm=1&lead=${lead.id}`}]
         ]}});
         buttonsReady = true;
       } catch { /* card and files were already delivered; report configuration issue */ }
     }
-    return { sent: true, logged: !logged.error, attachmentsSent, attachmentError, buttonsReady };
+    return { sent: true, logged: !logged.error, attachmentsSent, attachmentError, buttonsReady, aiReview };
   });
