@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { getReviewStates } from "@/lib/review-state.functions";
 export function useReviewStates(ids: string[]) {
   const key = [...new Set(ids)].sort().join(",");
-  const [states,setStates] = useState<Record<string,{status:string;label:string}>>({});
+  const [states,setStates] = useState<Record<string,{status:string;label:string;reason?:string}>>({});
   const [error,setError] = useState("");
   useEffect(() => {
     let active=true;
@@ -12,7 +12,7 @@ export function useReviewStates(ids: string[]) {
         const {data} = await supabase.auth.getSession();
         if (!data.session) return;
         const leadIds = key ? key.split(",") : [];
-        let result: Record<string,{status:string;label:string}> = {};
+        let result: Record<string,{status:string;label:string;reason?:string}> = {};
         for (let i=0;i<leadIds.length;i+=500) Object.assign(result,await getReviewStates({data:{accessToken:data.session.access_token,leadIds:leadIds.slice(i,i+500)}}));
         if (active) {setStates(result);setError("");}
       } catch { if(active) setError("Не удалось обновить результаты проверки. Проверьте подключение D1 LEAD_REVIEWS."); }
