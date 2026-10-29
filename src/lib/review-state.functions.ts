@@ -15,7 +15,7 @@ export const getReviewStates = createServerFn({method:"POST"})
   .handler(async ({data}) => {
     const db = await manager(data.accessToken);
     if (!Array.isArray(data.leadIds) || data.leadIds.length > 1000) throw new Error("Слишком много заявок");
-    const states: Record<string,{status:string;label:string}> = {};
+    const states: Record<string,{status:string;label:string;reason?:string}> = {};
     if (!data.leadIds.length || !process.env["TELEGRAM_WEBHOOK_SECRET"]) return states;
     const { reviewDb } = await import("./telegram-review.server");
     const reviewDatabase = await reviewDb();
@@ -25,12 +25,14 @@ export const getReviewStates = createServerFn({method:"POST"})
       if (visible.error) throw new Error("Нет доступа к заявкам");
       const permitted = (visible.data || []).map(row => row.id);
       if (!permitted.length) continue;
-      const result = await reviewDatabase.prepare(`SELECT lead_id,type FROM lead_reviews WHERE lead_id IN (${permitted.map(()=>"?").join(",")}) ORDER BY created_at DESC,id DESC`).bind(...permitted).all();
+      const result = await reviewDatabase.prepare(`SELECT lead_id,type,description FROM lead_reviews WHERE lead_id IN (${permitted.map(()=>"?").join(",")}) ORDER BY created_at DESC,id DESC`).bind(...permitted).all();
       for (const row of result.results) {
         if (states[row.lead_id]?.status === "accepted") continue;
         if (states[row.lead_id] && row.type !== "review_accepted") continue;
         const status = row.type === "review_accepted" ? "accepted" : row.type === "review_needs_info" ? "needs_info" : "pending";
-        states[row.lead_id] = {status,label:status === "accepted" ? "Выполнен · проверен" : status === "needs_info" ? "Нужна дополнительная информация" : "На проверке"};
+        let reason="";
+        try {const metadata=JSON.parse(row.description);reason=typeof metadata.aiReview?.reason==="string" ? metadata.aiReview.reason.slice(0,800) : "";} catch {}
+        states[row.lead_id] = {status,reason,label:status === "accepted" ? "Выполнен · проверен" : status === "needs_info" ? "Нужна дополнительная информация" : "На проверке"};
       }
     }
     return states;
