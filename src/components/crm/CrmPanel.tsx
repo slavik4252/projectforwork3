@@ -101,6 +101,7 @@ export default function CrmPanel({ open, onClose }: { open: boolean; onClose: ()
           >
             <X className="w-5 h-5" />
           </button>
+          <a href="/workspace" className="shrink-0 text-sm text-blue-600 underline cursor-pointer">Кабинеты агентов</a>
         </div>
 
         <div key={openCount} className="p-3 pr-12 sm:p-5 sm:pr-16 lg:p-7 lg:pr-20 min-w-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
