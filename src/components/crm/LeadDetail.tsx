@@ -5,7 +5,8 @@ import LeadScripts from "./LeadScripts";
 import LeadEvidence from "./LeadEvidence";
 import { StatusBadge } from "./Dashboard";
 import { sendLeadToTelegram } from "@/lib/telegram-review.functions";
-import { ArrowLeft, Plus, Trash2, Phone, Mail, Send, MessageCircle, StickyNote } from "lucide-react";
+import { claimLead, releaseLead } from "@/lib/review-state.functions";
+import { ArrowLeft, Plus, Trash2, Phone, Mail, Send, MessageCircle, StickyNote, Hand, Lock, Archive } from "lucide-react";
 
 const STATUS_OPTIONS: LeadStatus[] = ["new", "qualified", "in_progress", "won", "lost"];
 const STATUS_LABELS: Record<string, string> = {
@@ -18,8 +19,13 @@ const CHANNEL_ICON: Record<string, typeof Phone> = {
 };
 
 export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () => void }) {
-  const { states: reviewStates, error: reviewError } = useReviewStates([lead.id]);
+  const { states: reviewStates, claims, me, error: reviewError, refresh: refreshReview } = useReviewStates([lead.id]);
   const accepted = reviewStates[lead.id]?.status === "accepted";
+  const claim = claims[lead.id];
+  const mine = !!claim && !!me && claim.managerId === me;
+  const takenByOther = !!claim && !mine;
+  const [claiming, setClaiming] = useState(false);
+  const [claimMessage, setClaimMessage] = useState("");
   const [screenshots, setScreenshots] = useState<File[]>([]);
   const [sendingTelegram, setSendingTelegram] = useState(false);
   const [telegramMessage, setTelegramMessage] = useState("");
@@ -42,8 +48,55 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
 
   useEffect(() => { setScreenshots([]); load(); }, [lead.id]);
 
+  // A report accepted by the AI or manually in Telegram completes the lead and moves it to the archive.
+  useEffect(() => {
+    if (!accepted || status === "won") return;
+    setStatus("won");
+    void (async () => {
+      await supabase.from("leads").update({ status: "won" }).eq("id", lead.id);
+      await supabase.from("activities").insert({ lead_id: lead.id, type: "status", description: "Отчёт принят — заявка выполнена и перенесена в архив" });
+      load();
+    })();
+  }, [accepted]);
+
+  async function token() {
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session) throw new Error("Сначала войдите в CRM");
+    return data.session.access_token;
+  }
+
+  async function take() {
+    if (claiming) return;
+    setClaiming(true); setClaimMessage("");
+    try {
+      const result = await claimLead({ data: { accessToken: await token(), leadId: lead.id } });
+      if (result.created) {
+        await supabase.from("activities").insert({ lead_id: lead.id, type: "claim", description: `Заявку взял в работу ${result.claim.managerEmail}` });
+        if (status === "new" || status === "qualified") await changeStatus("in_progress");
+        else load();
+      }
+      await refreshReview();
+    } catch (error) {
+      setClaimMessage(error instanceof Error ? error.message : "Не удалось взять заявку");
+      await refreshReview();
+    } finally { setClaiming(false); }
+  }
+
+  async function release() {
+    if (claiming || !window.confirm("Отказаться от заявки? Её смогут взять другие менеджеры.")) return;
+    setClaiming(true); setClaimMessage("");
+    try {
+      await releaseLead({ data: { accessToken: await token(), leadId: lead.id } });
+      await supabase.from("activities").insert({ lead_id: lead.id, type: "claim", description: `Менеджер ${claim?.managerEmail || ""} отказался от заявки` });
+      if (status === "in_progress") await changeStatus("new"); else load();
+      await refreshReview();
+    } catch (error) {
+      setClaimMessage(error instanceof Error ? error.message : "Не удалось отказаться от заявки");
+    } finally { setClaiming(false); }
+  }
+
   async function sendForReview() {
-    if (sendingTelegram || accepted) return;
+    if (sendingTelegram || accepted || takenByOther) return;
     setSendingTelegram(true);
     setTelegramMessage("");
     try {
@@ -64,7 +117,9 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
       }
       const verdict=result.aiReview.status==="passed" ? "ИИ: проверка пройдена." : result.aiReview.status==="needs_info" ? "Нужна дополнительная информация." : "Требуется ручная проверка.";
       setTelegramMessage(verdict+" "+result.aiReview.reason+(result.logged ? " Отчёт отправлен в Telegram." : " Отчёт отправлен, но запись истории не сохранилась."));
-      if (!result.buttonsReady) setTelegramMessage("Отчёт отправлен, но результат проверки на сайте не подтверждён. Проверьте D1 и секреты; не считайте лид автоматически выполненным.");
+      if (!result.registered) setTelegramMessage("Отчёт отправлен, но результат проверки на сайте не подтверждён. Проверьте D1 и секреты; не считайте лид автоматически выполненным.");
+      else if (result.archived) { setStatus("won"); setTelegramMessage(verdict+" "+result.aiReview.reason+" Заявка выполнена и перенесена в архив."); }
+      await refreshReview();
       await load();
     } catch (error) {
       setTelegramMessage(error instanceof Error ? error.message : "Не удалось отправить лид");
@@ -135,8 +190,29 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
 
         {lead.note && <p className="mt-4 pt-4 border-t border-c text-sm text-dim">{lead.note}</p>}
 
+        <div className="mt-5 rounded-xl border border-c bg-page p-3 sm:p-4 space-y-2">
+          {accepted ? (
+            <p className="flex items-center gap-2 text-sm font-medium text-[#0f766e]"><Archive className="w-4 h-4" /> Заявка выполнена и находится в архиве{claim ? ` · ${claim.managerEmail}` : ""}</p>
+          ) : mine ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="flex items-center gap-2 text-sm font-medium text-[#2563eb]"><Hand className="w-4 h-4" /> Вы взяли эту заявку — другие менеджеры не могут её взять</p>
+              <button type="button" onClick={() => void release()} disabled={claiming} className="text-xs border border-c rounded-lg px-3 py-2 cursor-pointer hover:bg-[#eef3fa] disabled:opacity-50">Отказаться</button>
+            </div>
+          ) : takenByOther ? (
+            <p className="flex items-center gap-2 text-sm font-medium text-[#b45309]"><Lock className="w-4 h-4" /> Заявку взял {claim.managerEmail}. Работать с ней может только он.</p>
+          ) : (
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="button" onClick={() => void take()} disabled={claiming} className="inline-flex items-center gap-2 bg-[#0d9488] text-white rounded-lg px-4 py-2 text-sm cursor-pointer hover:opacity-90 disabled:opacity-50">
+                <Hand className="w-4 h-4" /> {claiming ? "Закрепляем…" : "Взять заявку"}
+              </button>
+              <p className="text-xs text-dim">Заявка свободна. После того как вы её возьмёте, другие менеджеры не смогут с ней работать.</p>
+            </div>
+          )}
+          {claimMessage && <p role="alert" className="text-sm text-[#e11d48]">{claimMessage}</p>}
+        </div>
+
         <div className="mt-5 space-y-2">
-          <button type="button" onClick={() => void sendForReview()} disabled={sendingTelegram || accepted}
+          <button type="button" onClick={() => void sendForReview()} disabled={sendingTelegram || accepted || takenByOther}
             className="inline-flex items-center gap-2 bg-[#2563eb] text-white rounded-lg px-4 py-2 text-sm cursor-pointer hover:bg-[#1d4ed8] disabled:opacity-50 disabled:cursor-not-allowed">
             <Send className="w-4 h-4" />
             {sendingTelegram ? "Отправляем…" : "Отправить в Telegram на проверку"}
@@ -164,7 +240,7 @@ export default function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () =>
         </div>
       </div>
 
-      <LeadScripts key={lead.id+"-scripts"} lead={lead} />
+      <LeadScripts key={lead.id+"-scripts"} lead={lead} canContact={mine && !accepted} onTake={claim || accepted ? undefined : () => void take()} />
 
       <LeadEvidence files={screenshots} onChange={setScreenshots} disabled={sendingTelegram} />
 

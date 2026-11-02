@@ -3,11 +3,14 @@ import { supabase, type Lead, type LeadStatus } from "@/lib/supabase";
 import { useReviewStates } from "./useReviewStates";
 import { StatusBadge } from "./Dashboard";
 import { useLeadsLive } from "./useLeadsLive";
+import type { LeadClaim } from "@/lib/lead-claims.core";
 import { Search, Filter, Inbox } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = {
   all: "Рабочие лиды",
-  reviewed: "Выполненные · проверенные",
+  free: "Свободные",
+  mine: "Мои",
+  reviewed: "Архив · выполненные",
   new: "Новые",
   qualified: "Квалифицированные",
   in_progress: "В работе",
@@ -17,9 +20,16 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUSES = Object.keys(STATUS_LABELS);
 
+function ClaimBadge({ claim, me, archived }: { claim: LeadClaim | undefined; me: string; archived: boolean }) {
+  if (archived) return null;
+  if (!claim) return <span className="text-xs rounded-lg px-2 py-1 bg-[#0d9488]/10 text-[#0f766e]">Свободна</span>;
+  const own = claim.managerId === me;
+  return <span className={`text-xs rounded-lg px-2 py-1 ${own ? "bg-[#2563eb]/10 text-[#2563eb]" : "bg-amber-50 text-amber-800"}`}>{own ? "Моя" : "Взял: " + claim.managerEmail}</span>;
+}
+
 export default function LeadsList({ onOpen }: { onOpen: (lead: Lead) => void }) {
   const [leads, setLeads] = useState<Lead[]>([]);
-  const { states: reviews, error: reviewError } = useReviewStates(leads.map(lead => lead.id));
+  const { states: reviews, claims, me, error: reviewError } = useReviewStates(leads.map(lead => lead.id));
   const [filter, setFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -27,7 +37,7 @@ export default function LeadsList({ onOpen }: { onOpen: (lead: Lead) => void }) 
   async function load() {
     setLoading(true);
     let q = supabase.from("leads").select("*").order("created_at", { ascending: false });
-    if (filter !== "all" && filter !== "reviewed") q = q.eq("status", filter as LeadStatus);
+    if (!["all", "reviewed", "free", "mine"].includes(filter)) q = q.eq("status", filter as LeadStatus);
     const { data } = await q;
     setLeads((data ?? []) as Lead[]);
     setLoading(false);
@@ -36,7 +46,21 @@ export default function LeadsList({ onOpen }: { onOpen: (lead: Lead) => void }) 
   useEffect(() => { load(); }, [filter]);
   useLeadsLive(() => load());
 
-  const working = leads.filter(lead => filter === "reviewed" ? reviews[lead.id]?.status === "accepted" : reviews[lead.id]?.status !== "accepted");
+  // Leads whose report was accepted are completed: mark them "won" once and keep them in the archive tab.
+  useEffect(() => {
+    const done = leads.filter(lead => reviews[lead.id]?.status === "accepted" && lead.status !== "won").map(lead => lead.id);
+    if (!done.length) return;
+    void supabase.from("leads").update({ status: "won" }).in("id", done).then(({ error }) => { if (!error) load(); });
+  }, [reviews]);
+
+  const working = leads.filter(lead => {
+    const archived = reviews[lead.id]?.status === "accepted";
+    if (filter === "reviewed") return archived;
+    if (archived) return false;
+    if (filter === "free") return !claims[lead.id];
+    if (filter === "mine") return claims[lead.id]?.managerId === me;
+    return true;
+  });
   const filtered = query
     ? working.filter(
         (l) =>
@@ -50,7 +74,7 @@ export default function LeadsList({ onOpen }: { onOpen: (lead: Lead) => void }) 
     <div className="space-y-5">
       <div>
         <h2 className="font-display text-2xl font-bold">Лиды</h2>
-        <p className="text-dim text-sm mt-1">{leads.length} заявок в CRM</p>
+        <p className="text-dim text-sm mt-1">{leads.length} заявок в CRM · показано {filtered.length}</p>
       </div>
 
       <div className="flex flex-col xl:flex-row gap-3">
@@ -102,6 +126,7 @@ export default function LeadsList({ onOpen }: { onOpen: (lead: Lead) => void }) 
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <p className="font-medium text-sm truncate">{l.name || "Без имени"}</p>
                     <StatusBadge status={l.status} />
+                    <ClaimBadge claim={claims[l.id]} me={me} archived={reviews[l.id]?.status === "accepted"} />
                     {reviews[l.id] && <span className={`text-xs rounded-lg px-2 py-1 ${reviews[l.id].status === "needs_info" ? "bg-amber-100 text-amber-900" : "bg-blue-50 text-blue-700"}`}>{reviews[l.id].label}</span>}
                   </div>
                   <p className="text-xs text-dim break-words">
