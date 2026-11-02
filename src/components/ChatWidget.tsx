@@ -54,9 +54,25 @@ export default function ChatWidget() {
     setInput("");
 
     let sid = sessionId;
+    let leadSaved = false;
     try {
       sid = await ensureSession();
       await persist("user", text, sid);
+
+      // Save the lead first, independently of the AI reply, so it reaches the CRM even if GigaChat is down.
+      if (/(?:\+?\d[\d\s\-()]{6,}|@[\w_]{3,}|[\w.+-]+@[\w-]+\.[\w.-]+)/.test(text)) {
+        const { error: leadErr } = await supabase.from("leads").insert({
+          name: "Из чата на сайте",
+          contact: text.slice(0, 500),
+          channel: "chat",
+          source: "Чат-виджет",
+          status: "new",
+          note: history.filter((m) => m.role === "user").map((m) => m.content).join("\n").slice(-2000) || "Заявка из чата с ИИ-агентом",
+        });
+        if (leadErr) console.error("Не удалось сохранить заявку из чата", leadErr);
+        else leadSaved = true;
+      }
+
 
       const { content: reply } = await askAgent({
         data: { messages: history.map((m) => ({ role: m.role, content: m.content })) },
@@ -64,26 +80,16 @@ export default function ChatWidget() {
       await persist("assistant", reply, sid);
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
 
-      // Heuristic: if the visitor shared a phone/email/@telegram, create a lead.
-      if (/(?:\+?\d[\d\s\-()]{6,}|@[\w_]{3,}|[\w.+-]+@[\w-]+\.[\w.-]+)/.test(text)) {
-        const { error: leadErr } = await supabase.from("leads").insert({
-          name: "Из чата на сайте",
-          contact: text,
-          channel: "chat",
-          source: "Чат-виджет",
-          status: "new",
-          note: "Заявка из чата с ИИ-агентом",
-        });
-        if (leadErr) console.error("Не удалось сохранить заявку из чата", leadErr);
-      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Ошибка связи с ИИ";
-      setError(msg);
+      if (!leadSaved) setError(msg);
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: "Извините, не удалось связаться с сервером. Напишите, пожалуйста, ещё раз.",
+          content: leadSaved
+            ? "Спасибо! Ваш контакт передан менеджеру — он свяжется с вами в ближайшее время."
+            : "Извините, не удалось связаться с сервером. Оставьте, пожалуйста, телефон, email или Telegram — менеджер свяжется с вами.",
         },
       ]);
     } finally {
