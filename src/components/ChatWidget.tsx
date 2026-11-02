@@ -66,7 +66,7 @@ export default function ChatWidget() {
 
       // Heuristic: if the visitor shared a phone/email/@telegram, create a lead.
       if (/(?:\+?\d[\d\s\-()]{6,}|@[\w_]{3,}|[\w.+-]+@[\w-]+\.[\w.-]+)/.test(text)) {
-        await supabase.from("leads").insert({
+        const { error: leadErr } = await supabase.from("leads").insert({
           name: "Из чата на сайте",
           contact: text,
           channel: "chat",
@@ -74,6 +74,7 @@ export default function ChatWidget() {
           status: "new",
           note: "Заявка из чата с ИИ-агентом",
         });
+        if (leadErr) console.error("Не удалось сохранить заявку из чата", leadErr);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Ошибка связи с ИИ";

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Lead } from "@/lib/supabase";
+import { parseContacts, contactLinks } from "@/lib/contact-links";
 
 const DEFAULTS = [
   {title:"1 · Первое сообщение",text:"Здравствуйте, {name}! Я представляю testrassilka. Подскажите, актуально ли для вашего бизнеса привлечение новых клиентов?"},
@@ -12,16 +13,12 @@ export default function LeadScripts({lead}: {lead:Lead}) {
   const [texts,setTexts]=useState(()=>DEFAULTS.map(item=>item.text.replaceAll("{name}",lead.name?.trim()||"")));
   const [message,setMessage]=useState("");
   const [busy,setBusy]=useState(false);
-  const contact=lead.contact?.trim()||"";
-  const username=/^@[a-zA-Z0-9_]{5,32}$/.test(contact) ? contact.slice(1) : "";
-  const digits=contact.replace(/[^0-9]/g,"");
-  const isPhone=/^\+?[\d\s()-]+$/.test(contact)&&digits.length>=10&&digits.length<=15;
-  const isEmail=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
-  const tg=username ? "https://t.me/"+username : isPhone ? "https://t.me/+"+digits : "";
-  const wa=isPhone ? "https://wa.me/"+digits : "";
-  async function copy(text:string) {
+  const parsed=parseContacts(lead.contact,lead.note,lead.name);
+  const links=contactLinks(parsed);
+  const phoneDisplay=parsed.phone ? "+"+parsed.phone : "";
+  async function copy(text:string, done="Текст скопирован. Вставьте его в переписку и отправьте вручную.") {
     setBusy(true);setMessage("");
-    try { await navigator.clipboard.writeText(text);setMessage("Текст скопирован. Вставьте его в переписку и отправьте вручную."); }
+    try { await navigator.clipboard.writeText(text);setMessage(done); }
     catch {setMessage("Буфер обмена недоступен. Выделите текст в поле и скопируйте вручную.");}
     finally {setBusy(false);}
   }
@@ -44,12 +41,14 @@ export default function LeadScripts({lead}: {lead:Lead}) {
     <div className="border-t border-c pt-4 space-y-3">
       <h4 className="text-sm font-semibold">Открыть канал связи</h4>
       <div className="flex flex-wrap gap-2">
-        {tg&&<a href={tg} target="_blank" rel="noopener noreferrer" className="min-h-11 inline-flex items-center border border-c rounded-lg px-3 text-sm">Telegram</a>}
-        {wa&&<a href={wa} target="_blank" rel="noopener noreferrer" className="min-h-11 inline-flex items-center border border-c rounded-lg px-3 text-sm">WhatsApp</a>}
-        {isEmail&&<a href={`mailto:${encodeURIComponent(contact)}?body=${encodeURIComponent(texts[active]||"")}`} className="min-h-11 inline-flex items-center border border-c rounded-lg px-3 text-sm">Создать письмо</a>}
-        {isPhone&&<button type="button" disabled={busy} onClick={()=>void copy(contact)} className="min-h-11 border border-c rounded-lg px-3 text-sm cursor-pointer">Скопировать номер для поиска в MAX</button>}
+        {links.telegram&&<a href={links.telegram} target="_blank" rel="noopener noreferrer" className="min-h-11 inline-flex items-center border border-c rounded-lg px-3 text-sm cursor-pointer hover:bg-[#eef3fa]">Telegram</a>}
+        {links.whatsapp&&<a href={links.whatsapp+"?text="+encodeURIComponent(texts[active]||"")} target="_blank" rel="noopener noreferrer" className="min-h-11 inline-flex items-center border border-c rounded-lg px-3 text-sm cursor-pointer hover:bg-[#eef3fa]">WhatsApp</a>}
+        {links.max&&<button type="button" disabled={busy} onClick={()=>{void copy(phoneDisplay,"Номер "+phoneDisplay+" скопирован. В MAX: Контакты → «+» → «Найти по номеру» и вставьте его.");window.open(links.max,"_blank","noopener,noreferrer");}} className="min-h-11 inline-flex items-center border border-c rounded-lg px-3 text-sm cursor-pointer hover:bg-[#eef3fa]">MAX</button>}
+        {links.email&&<a href={links.email+"?body="+encodeURIComponent(texts[active]||"")} className="min-h-11 inline-flex items-center border border-c rounded-lg px-3 text-sm cursor-pointer hover:bg-[#eef3fa]">Создать письмо</a>}
       </div>
-      <p className="text-xs text-dim">Наличие аккаунтов и частота использования ещё не проверены. Эти кнопки открывают канал для ручной проверки, а не подтверждают регистрацию человека.</p>
+      {(phoneDisplay||parsed.telegram)&&<p className="text-xs text-dim">Найдено: {[phoneDisplay,parsed.telegram&&"@"+parsed.telegram].filter(Boolean).join(" · ")}</p>}
+      {!links.telegram&&!links.whatsapp&&!links.email&&<p className="text-sm text-[#e11d48]">В заявке не найден телефон, Telegram или email.</p>}
+      <p className="text-xs text-dim">Наличие аккаунтов и частота использования ещё не проверены. Эти кнопки открывают канал для ручной проверки, а не подтверждают регистрацию человека. У MAX нет ссылки на чат по номеру, поэтому номер копируется и открывается веб-версия MAX.</p>
     </div>
   </section>;
 }
