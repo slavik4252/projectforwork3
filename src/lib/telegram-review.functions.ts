@@ -43,6 +43,14 @@ export const sendLeadToTelegram = createServerFn({ method: "POST" })
       prepared.push({ bytes, mime, name: image.name.slice(0,100) });
     }
     const lead = leadResult.data;
+    // Only the manager who took the lead may report it (free leads are taken automatically).
+    {
+      const { reviewDb } = await import("./telegram-review.server");
+      const { ensureClaimsTable, claimLeadCore } = await import("./lead-claims.core");
+      const claimsDb = await reviewDb();
+      await ensureClaimsTable(claimsDb);
+      await claimLeadCore(claimsDb, lead.id, user.data.user.id, user.data.user.email || user.data.user.id);
+    }
     const {analyzeLeadReport}=await import("./ai-report-review.server");
     const aiReview=await analyzeLeadReport(lead,images);
 
@@ -99,16 +107,26 @@ export const sendLeadToTelegram = createServerFn({ method: "POST" })
       id:logId, lead_id: lead.id, type:"telegram_review", description,
     });
     let buttonsReady = false;
-    if (reviewEnabled && !logged.error && !attachmentError) {
+    let registered = false;
+    if (!logged.error && !attachmentError) {
       try {
         const {telegram,registerReview} = await import("./telegram-review.server");
         await registerReview(logId,lead.id,{messageId:result.result.message_id,chatId,aiReview});
-        await telegram("editMessageReplyMarkup", {chat_id:chatId,message_id:result.result.message_id,reply_markup:{inline_keyboard:[
-          ...(aiReview.status === "manual_review" ? [[{text:"✅ Принять вручную",callback_data:`lr:a:${logId}`},{text:"📝 Нужна информация",callback_data:`lr:i:${logId}`}]] : []),
-          [{text:"📋 Открыть заявку",url:`https://projectforwork3.vibetivyko.workers.dev/?crm=1&lead=${lead.id}`}]
-        ]}});
-        buttonsReady = true;
+        registered = true;
+        if (reviewEnabled) {
+          await telegram("editMessageReplyMarkup", {chat_id:chatId,message_id:result.result.message_id,reply_markup:{inline_keyboard:[
+            ...(aiReview.status === "manual_review" ? [[{text:"✅ Принять вручную",callback_data:`lr:a:${logId}`},{text:"📝 Нужна информация",callback_data:`lr:i:${logId}`}]] : []),
+            [{text:"📋 Открыть заявку",url:`https://projectforwork3.vibetivyko.workers.dev/?crm=1&lead=${lead.id}`}]
+          ]}});
+          buttonsReady = true;
+        }
       } catch { /* card and files were already delivered; report configuration issue */ }
     }
-    return { sent: true, logged: !logged.error, attachmentsSent, attachmentError, buttonsReady, aiReview };
+    let archived = false;
+    if (registered && aiReview.status === "passed") {
+      const done = await db.from("leads").update({ status: "won" }).eq("id", lead.id);
+      archived = !done.error;
+      await db.from("activities").insert({ lead_id: lead.id, type: "status", description: "Отчёт прошёл проверку — заявка выполнена и перенесена в архив" });
+    }
+    return { sent: true, logged: !logged.error, attachmentsSent, attachmentError, buttonsReady, registered, archived, aiReview };
   });
